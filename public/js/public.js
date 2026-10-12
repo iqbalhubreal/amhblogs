@@ -24,6 +24,7 @@
     return codes.includes(nav) ? nav : 'en';
   }
   function applyLang() {
+    if (state.lang === "original") { document.documentElement.lang = "en"; /* Reset to original source */ }
     const info = langInfo(state.lang);
     document.documentElement.lang = state.lang;
     document.documentElement.dir = info.dir;
