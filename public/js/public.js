@@ -76,8 +76,8 @@
     let st = $('#siteVars'); if (!st) { st = document.createElement('style'); st.id = 'siteVars'; document.head.appendChild(st); }
     st.textContent = css;
 
-    if (s.about) { $('#aboutText').textContent = s.about; $('#aboutBox').hidden = false; }
-    $('#footerText').textContent = s.footer || '';
+    if (s.about) { $('#aboutText').textContent = (s.about[state.lang] || s.about); $('#aboutBox').hidden = false; }
+    $('#footerText').textContent = (s.footer[state.lang] || s.footer || '');
     $('#footerLinks').innerHTML = (s.links || []).filter((l) => l && l.label).map((l) => `<a href="${esc(safeUrl(l.url))}" rel="noopener">${esc(l.label)}</a>`).join('');
   }
 
