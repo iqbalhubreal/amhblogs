@@ -31,6 +31,7 @@
     $('#topicsTitle').textContent = t('topics');
     $('#aboutTitle').textContent = t('about');
     $('#searchInput').placeholder = t('search');
+    $('#searchInputMobile').placeholder = t('search');
   }
 
   /* ── helpers ── */
@@ -82,11 +83,23 @@
 
   /* ── topics sidebar ── */
   async function loadTopics() {
-    try { state.topics = (await api('/api/topics?lang=' + state.lang)).topics; } catch (e) { state.topics = []; }
-    const total = state.topics.reduce((a, x) => a + x.count, 0);
-    $('#topicList').innerHTML =
-      `<a href="/" data-link data-slug=""><span>${esc(t('all'))}</span><span class="n">${total}</span></a>` +
-      state.topics.map((x) => `<a href="/topic/${encodeURIComponent(x.slug)}" data-link data-slug="${esc(x.slug)}"><span>${esc(x.name)}</span><span class="n">${x.count}</span></a>`).join('');
+    try { state.topics = (await api('/api/topics?lang=' + state.lang)).topics || []; } catch (e) { state.topics = []; }
+    let totalPosts = 0;
+    try {
+      const postData = await api('/api/posts?' + new URLSearchParams({ lang: state.lang, limit: '1', page: '1' }));
+      totalPosts = Number(postData.total) || 0;
+    } catch (e) { /* keep topic loading resilient if the post count is unavailable */ }
+
+    // Show populated, named topics only, not the all-posts link or default General bucket.
+    const visibleTopics = state.topics.filter((x) => x.slug !== 'general' && Number(x.count) > 0);
+    const list = $('#topicList');
+    if (totalPosts === 0 || visibleTopics.length === 0) {
+      list.innerHTML = `<p class="topics-empty">${esc(t('empty'))}</p>`;
+      $('#topicsTitle').hidden = false;
+    } else {
+      list.innerHTML = visibleTopics.map((x) => `<a href="/topic/${encodeURIComponent(x.slug)}" data-link data-slug="${esc(x.slug)}"><span>${esc(x.name)}</span><span class="n">${x.count}</span></a>`).join('');
+      $('#topicsTitle').hidden = false;
+    }
     markActive();
   }
   let activeSlug = '';
@@ -100,7 +113,7 @@
     ? `<div class="cover ${cls || ''}"><img src="${esc(p.cover)}" alt="" loading="lazy"></div>`
     : `<div class="cover ph ${cls || ''}" aria-hidden="true">${esc([...(p.title || '?')][0] || '?')}</div>`;
   const metaLine = (p) => `<div class="meta"><span>${esc(fmtDate(p.date))}</span><span class="dot">${mins(p.words)} ${esc(t('minRead'))}</span></div>`;
-  const chip = (p) => (p.topic_name ? `<span class="chip">${esc(p.topic_name)}</span>` : '');
+  const chip = (p) => (p.topic_name && p.topic_slug !== 'general' ? `<span class="chip">${esc(p.topic_name)}</span>` : '');
   const card = (p) => `<a class="card" href="/post/${encodeURIComponent(p.slug)}" data-link>${cover(p)}<div class="body">${chip(p)}<h3>${esc(p.title)}</h3><p>${esc(p.excerpt)}</p>${metaLine(p)}</div></a>`;
   const hero = (p) => `<a class="hero" href="/post/${encodeURIComponent(p.slug)}" data-link>${cover(p)}<div class="body">${chip(p)}<h2>${esc(p.title)}</h2><p>${esc(p.excerpt)}</p>${metaLine(p)}</div></a>`;
   const skeleton = () => { view.innerHTML = '<div class="grid">' + '<div class="skel"></div>'.repeat(6) + '</div>'; };
@@ -155,6 +168,7 @@
     markActive('');
     const q = (new URLSearchParams(location.search).get('q') || '').trim();
     $('#searchInput').value = q;
+    $('#searchInputMobile').value = q;
     skeleton();
     try {
       const list = await renderList({ q }, false);
@@ -174,8 +188,8 @@
     const draft = p.status !== 'published' ? '<div class="notice">Draft — only you can see this.</div>' : '';
     view.innerHTML = `
       <article class="post" lang="${contentLang}" dir="${info.dir}">
-        <a class="crumbs" href="${p.topic_slug ? '/topic/' + encodeURIComponent(p.topic_slug) : '/'}" data-link>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>${esc(p.topic_name || t('back'))}
+        <a class="crumbs" href="${p.topic_slug && p.topic_slug !== 'general' ? '/topic/' + encodeURIComponent(p.topic_slug) : '/'}" data-link>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>${esc(p.topic_slug && p.topic_slug !== 'general' ? p.topic_name : t('back'))}
         </a>
         ${draft}${notice}
         ${p.topic_name ? `<span class="chip">${esc(p.topic_name)}</span>` : ''}
@@ -225,11 +239,17 @@
   window.addEventListener('popstate', route);
 
   /* ── controls ── */
-  $('#searchForm').addEventListener('submit', (e) => {
+  function submitSearch(e, inputId) {
     e.preventDefault();
-    const q = $('#searchInput').value.trim();
+    const q = $(inputId).value.trim();
+    $('#searchInput').value = q;
+    $('#searchInputMobile').value = q;
     if (q) go('/search?q=' + encodeURIComponent(q)); else go('/');
-  });
+  }
+  $('#searchForm').addEventListener('submit', (e) => submitSearch(e, '#searchInput'));
+  $('#searchFormMobile').addEventListener('submit', (e) => submitSearch(e, '#searchInputMobile'));
+  $('#searchInput').addEventListener('input', () => { $('#searchInputMobile').value = $('#searchInput').value; });
+  $('#searchInputMobile').addEventListener('input', () => { $('#searchInput').value = $('#searchInputMobile').value; });
   $('#themeBtn').addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next); store.set('ib_theme', next);

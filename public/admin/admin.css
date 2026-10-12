@@ -75,8 +75,8 @@ textarea { resize: vertical; min-height: 84px; }
 .nav-row { display: flex; gap: 8px; padding: 6px 8px 0; }
 .nav-row .btn { flex: 1; }
 .mbar, .scrim { display: none; }
-.main { padding: 34px clamp(18px, 3.4vw, 48px) 80px; min-width: 0; max-width: 1280px; width: 100%; }
-.page-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
+.main { padding: 20px clamp(18px, 3.4vw, 48px) 40px; min-width: 0; max-width: 1280px; width: 100%; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .page-head h1 { font-size: clamp(1.6rem, 3vw, 2.1rem); }
 .page-head .sub { color: var(--muted); margin: 4px 0 0; }
 
@@ -212,7 +212,9 @@ textarea { resize: vertical; min-height: 84px; }
   body.nav-open .nav { transform: none; }
   .scrim { display: block; position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .45); opacity: 0; pointer-events: none; transition: opacity .25s; }
   body.nav-open .scrim { opacity: 1; pointer-events: auto; }
-  .main { padding-top: 22px; }
+  .main { padding-top: 14px; padding-bottom: 32px; }
+  .page-head { margin-bottom: 12px; }
+  .toolbar { margin-bottom: 12px; }
   .row { grid-template-columns: 1fr; }
   .rte-bar { padding: 6px; }
   .rte-area { padding: 18px 16px; min-height: 360px; }
