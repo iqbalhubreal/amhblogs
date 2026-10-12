@@ -1,0 +1,13 @@
+{
+  "siteName": "AMH Blogs",
+  "tagline": "Thoughts, notes and ideas, in your language.",
+  "logo": "/assets/logo.svg",
+  "showLogo": true,
+  "accent": "#b4532a",
+  "accentDark": "#e8946a",
+  "headingFont": "Fraunces",
+  "about": "Welcome to AMH Blogs. I write about what I learn and what I find interesting. Pick a topic on the left, or switch the language at the top.",
+  "footer": "© AMH Blogs. All rights reserved.",
+  "links": [],
+  "publicUrl": ""
+}
