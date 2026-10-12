@@ -133,7 +133,6 @@
     let page = 1;
     const box = document.createElement('div');
     const first = await api('/api/posts?' + base + '&page=1');
-    window.onscroll = async () => {
       if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500 && !loading) {
         loading = true;
         page += 1;
