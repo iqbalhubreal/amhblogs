@@ -1,0 +1,13 @@
+{
+  "name": "amh-blogs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AMH Blogs - a multilingual blog with an admin panel, Turso storage and Gemini translation.",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.0"
+  },
+  "engines": { "node": ">=18" }
+}
