@@ -244,6 +244,9 @@ async function translatePost(post, lang) {
 Rules:
 - Keep every HTML tag, attribute, URL, class, style, src and href EXACTLY as is. Translate only the visible text, plus alt and title attribute values.
 - Do not translate or alter the contents of <code> and <pre> blocks.
+- IMPORTANT: Do not translate or alter phrases or sentences that are not in the main source language (English). If you see text in Arabic or other languages, keep them EXACTLY as they appear in the original text.
+- Do not translate or transcribe abbreviations, acronyms, or specific technical keywords (e.g., ABC, NASA) into other scripts (like Arabic or Bengali). Keep them exactly as they are in the source text.
+- For idioms, metaphors, and common phrases that do not have direct literal equivalents, prioritize capturing the intended meaning and context in the target language to maintain the original nuance, while translating the majority of the prose fluently.
 - Keep proper nouns, brand names and numbers. Use natural, fluent ${name}, not word-for-word.
 - Return JSON with the keys "title", "excerpt" and "content".`;
   const schema = { type: 'OBJECT', properties: { title: { type: 'STRING' }, excerpt: { type: 'STRING' }, content: { type: 'STRING' } }, required: ['title', 'excerpt', 'content'] };
