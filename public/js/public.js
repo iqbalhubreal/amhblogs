@@ -124,6 +124,15 @@
     let page = 1;
     const box = document.createElement('div');
     const first = await api('/api/posts?' + base + '&page=1');
+    window.onscroll = async () => {
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500 && !loading) {
+        loading = true;
+        page += 1;
+        try { const d = await api('/api/posts?' + base + '&page=' + page); grid.insertAdjacentHTML('beforeend', d.posts.map(card).join('')); } catch (e) { page -= 1; }
+        loading = false;
+      }
+    };
+    let loading = false;
     if (!first.posts.length) { box.innerHTML = `<div class="empty">${esc(t('empty'))}</div>`; return box; }
     let html = '', rest = first.posts;
     if (withHero) { html += hero(rest[0]); rest = rest.slice(1); }
