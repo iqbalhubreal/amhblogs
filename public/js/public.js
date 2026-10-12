@@ -119,6 +119,15 @@
   const skeleton = () => { view.innerHTML = '<div class="grid">' + '<div class="skel"></div>'.repeat(6) + '</div>'; };
 
   async function renderList(params, withHero) {
+    window.onscroll = async () => {
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500 && !loading) {
+        loading = true;
+        page += 1;
+        try { const d = await api('/api/posts?' + base + '&page=' + page); grid.insertAdjacentHTML('beforeend', d.posts.map(card).join('')); } catch (e) { page -= 1; }
+        loading = false;
+      }
+    };
+    let loading = false;
     const base = new URLSearchParams({ lang: state.lang, limit: '12' });
     Object.entries(params).forEach(([k, v]) => v && base.set(k, v));
     let page = 1;
@@ -139,15 +148,6 @@
     box.innerHTML = html + `<div class="grid">${rest.map(card).join('')}</div>`;
     const grid = $('.grid', box);
     let loaded = first.posts.length;
-    const moreBtn = document.createElement('button');
-    moreBtn.className = 'more'; moreBtn.textContent = t('loadMore');
-    const sync = () => { moreBtn.hidden = loaded >= first.total; };
-    moreBtn.onclick = async () => {
-      page += 1; moreBtn.disabled = true;
-      try { const d = await api('/api/posts?' + base + '&page=' + page); grid.insertAdjacentHTML('beforeend', d.posts.map(card).join('')); loaded += d.posts.length; } catch (e) { /* keep button */ }
-      moreBtn.disabled = false; sync();
-    };
-    sync(); box.appendChild(moreBtn);
     return box;
   }
 
