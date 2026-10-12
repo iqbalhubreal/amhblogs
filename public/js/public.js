@@ -91,7 +91,7 @@
     } catch (e) { /* keep topic loading resilient if the post count is unavailable */ }
 
     // Show populated, named topics only, not the all-posts link or default General bucket.
-    const visibleTopics = state.topics.filter((x) => x.slug !== 'general' && Number(x.count) > 0);
+    const visibleTopics = state.topics.filter((x) => Number(x.count) > 0);
     const list = $('#topicList');
     if (totalPosts === 0 || visibleTopics.length === 0) {
       list.innerHTML = `<p class="topics-empty">${esc(t('empty'))}</p>`;
