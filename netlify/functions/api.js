@@ -19,7 +19,6 @@ const LANGS = {
 const MAX_MEDIA_BYTES = 1500000;      // hard cap (the browser already aims for < 250 KB)
 const MEDIA_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const AUDIO_MIMES = ['audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/aac', 'audio/x-m4a', 'audio/wav', 'audio/x-wav'];
-const MAX_AUDIO_BYTES = 3600000;      // ~5 min of voice; bigger files go through the Uploader as a link
 const SESSION_MS = 7 * 24 * 3600 * 1000;
 
 /* ───────────────────────── helpers ───────────────────────── */
@@ -244,6 +243,7 @@ async function translatePost(post, lang) {
 Rules:
 - Keep every HTML tag, attribute, URL, class, style, src and href EXACTLY as is. Translate only the visible text, plus alt and title attribute values.
 - Do not translate or alter the contents of <code> and <pre> blocks.
+- If technical keywords, specific key phrases, or important terminology are present in English, keep them in the original English language instead of transliterating them.
 - Keep proper nouns, brand names and numbers. Use natural, fluent ${name}, not word-for-word.
 - Return JSON with the keys "title", "excerpt" and "content".`;
   const schema = { type: 'OBJECT', properties: { title: { type: 'STRING' }, excerpt: { type: 'STRING' }, content: { type: 'STRING' } }, required: ['title', 'excerpt', 'content'] };
