@@ -7,7 +7,7 @@
  *
  * Secrets (Netlify → Site settings → Environment variables):
  *   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, GEMINI_API_KEY, ADMIN_PASSWORD, SESSION_SECRET
- * Optional: GEMINI_MODEL (default gemini-3.1-flash-lite), GEMINI_THINKING (default medium)
+ * Optional: GEMINI_MODEL (default gemini-3.6-flash), GEMINI_THINKING (default medium)
  */
 const crypto = require('crypto');
 const { createClient } = require('@libsql/client/web');
@@ -193,7 +193,7 @@ function safeEqual(a, b) {
 async function gemini(systemText, userText, schema) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw httpErr(500, 'GEMINI_API_KEY is not set');
-  const model = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
   const level = process.env.GEMINI_THINKING || 'medium';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 24000);
@@ -293,7 +293,7 @@ exports.handler = async (event) => {
       const env = Object.fromEntries(['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN', 'GEMINI_API_KEY', 'ADMIN_PASSWORD', 'SESSION_SECRET'].map((k) => [k, !!process.env[k]]));
       let dbOk = false; let counts = null; let dbError = '';
       try { await init(); dbOk = true; counts = await one('SELECT (SELECT COUNT(*) FROM posts) AS posts, (SELECT COUNT(*) FROM topics) AS topics, (SELECT COUNT(*) FROM media) AS media, (SELECT COALESCE(SUM(size),0) FROM media) AS media_bytes'); } catch (e) { dbError = e.message; }
-      return respond(200, { env, dbOk, dbError, counts, model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite', thinking: process.env.GEMINI_THINKING || 'medium' });
+      return respond(200, { env, dbOk, dbError, counts, model: process.env.GEMINI_MODEL || 'gemini-3.6-flash', thinking: process.env.GEMINI_THINKING || 'medium' });
     }
 
     /* ── auth ── */
