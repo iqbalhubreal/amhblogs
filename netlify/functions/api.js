@@ -199,10 +199,13 @@ async function gemini(systemText, userText, schema, opts = {}) {
   let level = opts.thinking || process.env.GEMINI_THINKING || 'medium';
   if (level === 'none') level = 'minimal';            // the admin menu calls this "Minimal (None)"
   if (!['minimal', 'low', 'medium', 'high'].includes(level)) level = 'medium';
+  // No limit of our own (5 minutes is just a safety net). Netlify's function limit now decides how long a translation may take.
+  // Set GEMINI_TIMEOUT_MS in Netlify to use a shorter limit.
+  const timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS, 10) || 300000;
 
   async function call(withThinking) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 24000);
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     const generationConfig = { temperature: 0.3, responseMimeType: 'application/json', responseSchema: schema };
     if (withThinking) generationConfig.thinkingConfig = { thinkingLevel: level };
     let r;
