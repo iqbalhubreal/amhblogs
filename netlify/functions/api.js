@@ -67,6 +67,7 @@ function init() {
            updated_at INTEGER, PRIMARY KEY(post_id, lang))`,
         `CREATE TABLE IF NOT EXISTS media(
            id TEXT PRIMARY KEY, mime TEXT NOT NULL, b64 TEXT NOT NULL, size INTEGER, created_at INTEGER)`,
+        'CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)',
         'CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status, published_at)',
         'CREATE INDEX IF NOT EXISTS idx_posts_topic ON posts(topic_id)',
       ], 'write');
@@ -190,35 +191,42 @@ function safeEqual(a, b) {
 }
 
 /* ───────────────────────── Gemini translation ───────────────────────── */
-async function gemini(systemText, userText, schema) {
+/** opts.model / opts.thinking come from the admin panel's "Translation Options"; env vars are the fallback. */
+async function gemini(systemText, userText, schema, opts = {}) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw httpErr(500, 'GEMINI_API_KEY is not set');
-  const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
-  const level = process.env.GEMINI_THINKING || 'medium';
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 24000);
-  let res;
-  try {
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      signal: ctrl.signal,
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemText }] },
-        contents: [{ role: 'user', parts: [{ text: userText }] }],
-        generationConfig: {
-          temperature: 0.3,
-          responseMimeType: 'application/json',
-          responseSchema: schema,
-          thinkingConfig: { thinkingLevel: level },
-        },
-      }),
-    });
-  } catch (e) {
-    throw httpErr(504, e.name === 'AbortError' ? 'Gemini took too long (try a shorter post or raise the function timeout)' : `Gemini request failed: ${e.message}`);
-  } finally { clearTimeout(timer); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw httpErr(502, `Gemini: ${(data.error && data.error.message) || res.statusText}`);
+  const model = (/^[A-Za-z0-9._-]{3,80}$/.test(opts.model || '') ? opts.model : '') || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  let level = opts.thinking || process.env.GEMINI_THINKING || 'medium';
+  if (level === 'none') level = 'minimal';            // the admin menu calls this "Minimal (None)"
+  if (!['minimal', 'low', 'medium', 'high'].includes(level)) level = 'medium';
+
+  async function call(withThinking) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 24000);
+    const generationConfig = { temperature: 0.3, responseMimeType: 'application/json', responseSchema: schema };
+    if (withThinking) generationConfig.thinkingConfig = { thinkingLevel: level };
+    let r;
+    try {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemText }] },
+          contents: [{ role: 'user', parts: [{ text: userText }] }],
+          generationConfig,
+        }),
+      });
+    } catch (e) {
+      throw httpErr(504, e.name === 'AbortError' ? 'Gemini took too long (try a shorter post or raise the function timeout)' : `Gemini request failed: ${e.message}`);
+    } finally { clearTimeout(timer); }
+    return { res: r, data: await r.json().catch(() => ({})) };
+  }
+
+  let { res, data } = await call(true);
+  // If the chosen model rejects the thinking setting, retry once without it instead of failing.
+  if (!res.ok && res.status === 400 && /think/i.test((data.error && data.error.message) || '')) ({ res, data } = await call(false));
+  if (!res.ok) throw httpErr(502, `Gemini (${model}): ${(data.error && data.error.message) || res.statusText}`);
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   const text = parts.filter((p) => !p.thought && p.text).map((p) => p.text).join('').trim()
     .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
@@ -237,21 +245,31 @@ function chunkHtml(html, max = 4500) {
   return out.length ? out : [''];
 }
 
-async function translatePost(post, lang) {
-  const name = LANGS[lang];
-  const system = `You are a professional translator. Translate the blog content into ${name}.
+/** The instructions Gemini gets. {{language}} is replaced with the target language. Editable from the admin panel. */
+const DEFAULT_PROMPT = `You are a professional translator. Translate the blog content into {{language}}.
 Rules:
 - Keep every HTML tag, attribute, URL, class, style, src and href EXACTLY as is. Translate only the visible text, plus alt and title attribute values.
 - Do not translate or alter the contents of <code> and <pre> blocks.
 - STRICT RULE: Do not transliterate any technical keywords, project names, or key film terms (like "wide shot", "close-up", "pan", "tilt"). These terms MUST remain in their original English form using English characters. Absolutely NO phonetic spelling in the target language script.
-- Keep proper nouns, brand names and numbers. Use natural, fluent ${name}, not word-for-word.
-- Return JSON with the keys "title", "excerpt" and "content".`;
+- Keep proper nouns, brand names and numbers. Use natural, fluent {{language}}, not word-for-word.`;
+const MAX_PROMPT = 4000;
+
+async function getPrompt() {
+  const row = await one("SELECT value FROM settings WHERE key = 'translate_prompt'");
+  return row && row.value && String(row.value).trim() ? String(row.value) : DEFAULT_PROMPT;
+}
+
+async function translatePost(post, lang, opts = {}) {
+  const name = LANGS[lang];
+  const base = String(opts.prompt || DEFAULT_PROMPT);
+  // The JSON-output line is always added by the server so an edited prompt can never break the response format.
+  const system = `${base.split('{{language}}').join(name)}${base.includes('{{language}}') ? '' : `\n\nTarget language: ${name}.`}\n- Return JSON with the keys "title", "excerpt" and "content".`;
   const schema = { type: 'OBJECT', properties: { title: { type: 'STRING' }, excerpt: { type: 'STRING' }, content: { type: 'STRING' } }, required: ['title', 'excerpt', 'content'] };
   const chunks = chunkHtml(post.content);
   if (chunks.length > 12) throw httpErr(413, 'This post is too long to translate in one go. Split it into two posts.');
   // chunk 0 also carries title + excerpt; the rest only carry content. All run at the same time.
   const results = await Promise.all(chunks.map((c, i) => gemini(system,
-    JSON.stringify({ title: i === 0 ? post.title : '', excerpt: i === 0 ? (post.excerpt || '') : '', content: c }), schema)));
+    JSON.stringify({ title: i === 0 ? post.title : '', excerpt: i === 0 ? (post.excerpt || '') : '', content: c }), schema, opts)));
   const first = results[0];
   return {
     title: String(first.title || post.title).slice(0, 300),
@@ -260,12 +278,12 @@ Rules:
   };
 }
 
-async function translateTopics(topics, lang) {
+async function translateTopics(topics, lang, opts = {}) {
   const name = LANGS[lang];
   const out = await gemini(
     `Translate these blog topic names into ${name}. Keep them short. Return JSON {"names": [...]} with the same number of items in the same order.`,
     JSON.stringify(topics.map((t) => t.name)),
-    { type: 'OBJECT', properties: { names: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['names'] });
+    { type: 'OBJECT', properties: { names: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['names'] }, opts);
   if (!Array.isArray(out.names) || out.names.length !== topics.length) throw httpErr(502, 'Gemini returned the wrong number of topic names');
   return out.names;
 }
@@ -493,13 +511,29 @@ exports.handler = async (event) => {
       }
     }
 
+    /* translation prompt (editable from the admin panel) */
+    if (res === 'translate-prompt') {
+      if (method === 'GET') {
+        const prompt = await getPrompt();
+        return respond(200, { prompt, defaultPrompt: DEFAULT_PROMPT, isDefault: prompt === DEFAULT_PROMPT, max: MAX_PROMPT }, { 'Cache-Control': 'no-store' });
+      }
+      if (method === 'PUT') {
+        const text = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+        if (text.length > MAX_PROMPT) throw httpErr(400, `The prompt is too long (max ${MAX_PROMPT} characters)`);
+        if (!text || text === DEFAULT_PROMPT.trim()) await run("DELETE FROM settings WHERE key = 'translate_prompt'");
+        else await run("INSERT INTO settings(key, value) VALUES('translate_prompt', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [text]);
+        return respond(200, { ok: true, isDefault: !text || text === DEFAULT_PROMPT.trim() });
+      }
+    }
+
     /* translations */
     if (res === 'translate' && method === 'POST') {
       if (!LANGS[body.lang]) throw httpErr(400, 'Unknown language');
+      const gopts = { model: body.model, thinking: body.thinking };
       if (body.type === 'topics') {
         const topics = await all('SELECT id, name, names FROM topics ORDER BY sort');
         if (!topics.length) return respond(200, { ok: true });
-        const names = await translateTopics(topics, body.lang);
+        const names = await translateTopics(topics, body.lang, gopts);
         for (let i = 0; i < topics.length; i += 1) {
           let map = {}; try { map = JSON.parse(topics[i].names || '{}'); } catch (_) { /* ignore */ }
           map[body.lang] = names[i];
@@ -510,7 +544,7 @@ exports.handler = async (event) => {
       const p = await one('SELECT id, title, excerpt, content, lang FROM posts WHERE id = ?', [body.postId]);
       if (!p) throw httpErr(404, 'Post not found');
       if (p.lang === body.lang) throw httpErr(400, 'That is already the original language of this post');
-      const tr = await translatePost(p, body.lang);
+      const tr = await translatePost(p, body.lang, { ...gopts, prompt: await getPrompt() });
       await run(`INSERT INTO translations(post_id, lang, title, excerpt, content, updated_at) VALUES(?,?,?,?,?,?)
         ON CONFLICT(post_id, lang) DO UPDATE SET title=excluded.title, excerpt=excluded.excerpt, content=excluded.content, updated_at=excluded.updated_at`,
         [p.id, body.lang, tr.title, tr.excerpt, tr.content, Date.now()]);
