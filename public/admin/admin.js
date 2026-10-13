@@ -39,7 +39,7 @@
         const form = document.createElement('form');
         form.innerHTML = fields.map((f) => {
           if (f.type === 'checkbox') return `<div class="field"><label class="check"><input type="checkbox" name="${f.name}" ${f.value ? 'checked' : ''}> ${esc(f.label)}</label></div>`;
-          return `<div class="field"><label>${esc(f.label)}</label><input type="${f.type || 'text'}" name="${f.name}" value="${esc(f.value == null ? '' : f.value)}" placeholder="${esc(f.placeholder || '')}" ${f.required ? 'required' : ''}>${f.hint ? `<small>${esc(f.hint)}</small>' : ''}</div>`;
+          return `<div class="field"><label>${esc(f.label)}</label><input type="${f.type || 'text'}" name="${f.name}" value="${esc(f.value == null ? '' : f.value)}" placeholder="${esc(f.placeholder || '')}" ${f.required ? 'required' : ''}>${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</div>`;
         }).join('') + '<button type="submit" hidden></button>';
         let done = false;
         const collect = () => { const o = {}; fields.forEach((f) => { const i = form.elements[f.name]; o[f.name] = f.type === 'checkbox' ? i.checked : i.value; }); return o; };
@@ -128,8 +128,8 @@
         <div class="row">
           <div><a class="row-title" href="#/post/${p.id}">${esc(p.title)}</a>
             <div class="row-meta"><span class="badge ${p.status === 'published' ? 'live' : 'draft'}">${p.status === 'published' ? 'Published' : 'Draft'}</span>
-              ${p.topic_name ? `<span>${esc(p.topic_name)}</span>' : ''}<span>${esc(LN[p.lang] ? LN[p.lang].name : p.lang)}</span><span>${p.words} words</span><span>Edited ${fmtDate(p.updated_at)}</span>
-              ${p.langs ? `<span>+${p.langs.split(',').length} translations</span>' : ''}</div></div>
+              ${p.topic_name ? `<span>${esc(p.topic_name)}</span>` : ''}<span>${esc(LN[p.lang] ? LN[p.lang].name : p.lang)}</span><span>${p.words} words</span><span>Edited ${fmtDate(p.updated_at)}</span>
+              ${p.langs ? `<span>+${p.langs.split(',').length} translations</span>` : ''}</div></div>
           <div class="row-actions"><a class="btn sm" href="/post/${esc(p.slug)}" target="_blank" rel="noopener">View</a><a class="btn sm" href="#/post/${p.id}">Edit</a><button class="btn sm danger" data-del="${p.id}">Delete</button></div>
         </div>`).join('') : '<div class="empty">No posts found. <a href="#/post/new">Write your first post →</a></div>';
       document.querySelectorAll('[data-del]').forEach((b) => { b.onclick = async () => {
@@ -168,6 +168,7 @@
           <div class="card"><h3>Translation Options</h3>
             <div class="field"><label>Model</label><select id="model"><option value="gemini-3.8-flash">Gemini 3.8 Flash</option><option value="gemini-3.7-flash">Gemini 3.7 Flash</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option><option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option></select></div>
             <div class="field"><label>Thinking Level</label><select id="thinking"><option value="none">Minimal (None)</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+            <button type="button" class="btn sm" id="editPrompt" title="See and change the instructions Gemini follows when translating">Edit translation prompt</button>
           </div>
           <div class="card"><h3>Translations (Gemini)</h3><div id="trBox"></div></div>
         </aside>
@@ -181,6 +182,24 @@
     const rte = RichEditor.create($('#rte'), { onChange: mark });
     rte.setHTML(post.content || ''); dirty = false; leaveGuard = null;
     ['title', 'status', 'topic', 'lang', 'excerpt', 'slug', 'model', 'thinking'].forEach((k) => $('#' + k).addEventListener('input', mark));
+    $('#editPrompt').onclick = async () => {
+      let info;
+      try { info = await api('admin/translate-prompt'); } catch (e) { AdminUI.toast(e.message, true); return; }
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `<div class="field" style="margin:0"><label>Instructions sent to Gemini for every translation</label>
+        <textarea id="promptText" rows="14" maxlength="${info.max}" style="width:100%;font-family:inherit;line-height:1.5"></textarea>
+        <small>Write <code>{{language}}</code> where the target language should go. The reply format (title, excerpt, content) is added automatically, so you can't break it. Applies to all new translations; existing ones stay until you press Redo.</small></div>`;
+      const ta = $('#promptText', wrap); ta.value = info.prompt;
+      AdminUI.modal({
+        title: 'Translation prompt', body: wrap, wide: true,
+        actions: [
+          { label: 'Reset to default', danger: true, onClick: () => { ta.value = info.defaultPrompt; return false; } },
+          { label: 'Save prompt', primary: true, onClick: async () => {
+            try { const r = await api('admin/translate-prompt', 'PUT', { prompt: ta.value }); AdminUI.toast(r.isDefault ? 'Prompt reset to default' : 'Prompt saved'); } catch (e) { AdminUI.toast(e.message, true); return false; }
+          } },
+        ],
+      });
+    };
     const syncView = () => { const a = $('#viewBtn'); if (curId) { a.hidden = false; a.href = '/post/' + encodeURIComponent($('#slug').value || post.slug); } };
     syncView();
 
@@ -216,7 +235,7 @@
       $('#trBox').innerHTML = !curId ? '<p class="muted" style="margin:0;font-size:.88rem">Save the post first, then translate it into 11 languages with one click.</p>' : `
         <div class="tr-list">${LANGS.filter((l) => l.code !== src).map((l) => {
           const s = status[l.code]; const has = have[l.code];
-          const right = s === 'busy' ? '<span class="spin"></span>' : (s ? `<span class="err" title="${esc(s)}">${esc(s)}</span>' : has ? `<span class="ok">✓ ${fmtDate(has.updated_at)}</span><button class="x" data-rm="${l.code}" title="Delete translation">×</button>' : '');
+          const right = s === 'busy' ? '<span class="spin"></span>' : (s ? `<span class="err" title="${esc(s)}">${esc(s)}</span>` : has ? `<span class="ok">✓ ${fmtDate(has.updated_at)}</span><button class="x" data-rm="${l.code}" title="Delete translation">×</button>` : '');
           return `<div class="tr-item"><span>${esc(l.name)}</span><span class="st ${has && !s ? 'ok' : s && s !== 'busy' ? 'err' : ''}">${right}</span><button class="btn sm" data-tr="${l.code}" ${s === 'busy' ? 'disabled' : ''}>${has ? 'Redo' : 'Translate'}</button></div>`;
         }).join('')}</div>
         <div class="save-row"><button class="btn sm" id="trAll">Translate all</button><button class="btn sm" id="trTopics" title="Translate the sidebar topic names">Topic names</button></div>
@@ -289,7 +308,7 @@
       <div class="list">${Object.entries(h.env).map(([k, v]) => `<div class="chk"><span>${names[k]}</span><code>${k}</code><span class="state ${v ? 'ok' : 'no'}">${v ? '✓ Set' : '✗ Missing'}</span></div>`).join('')}
         <div class="chk"><span>Turso connection</span><code>${h.dbOk ? 'tables ready' : esc(h.dbError || '')}</code><span class="state ${h.dbOk ? 'ok' : 'no'}">${h.dbOk ? '✓ Connected' : '✗ Failed'}</span></div>
         <div class="chk"><span>Translation model</span><code>${esc(h.model)} · thinking: ${esc(h.thinking)}</code></div></div>
-      ${h.counts ? `<p class="muted" style="margin-top:16px">${h.counts.posts} posts · ${h.counts.topics} topics · ${h.counts.media} files (${Media.kb(Number(h.counts.media_bytes))})</p>' : ''}`;
+      ${h.counts ? `<p class="muted" style="margin-top:16px">${h.counts.posts} posts · ${h.counts.topics} topics · ${h.counts.media} files (${Media.kb(Number(h.counts.media_bytes))})</p>` : ''}`;
     $('#rf').onclick = route;
   }
 
