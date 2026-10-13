@@ -243,7 +243,7 @@ async function translatePost(post, lang) {
 Rules:
 - Keep every HTML tag, attribute, URL, class, style, src and href EXACTLY as is. Translate only the visible text, plus alt and title attribute values.
 - Do not translate or alter the contents of <code> and <pre> blocks.
-- STRICT RULE: Do not transliterate any technical keywords, project names, or key phrases. If they are in English, they MUST remain in English characters. Do not use phonetic spelling in the target language script (e.g., Bengali/Hindi).
+- STRICT RULE: Do not transliterate any technical keywords, project names, or key film terms (like "wide shot", "close-up", "pan", "tilt"). These terms MUST remain in their original English form using English characters. Absolutely NO phonetic spelling in the target language script.
 - Keep proper nouns, brand names and numbers. Use natural, fluent ${name}, not word-for-word.
 - Return JSON with the keys "title", "excerpt" and "content".`;
   const schema = { type: 'OBJECT', properties: { title: { type: 'STRING' }, excerpt: { type: 'STRING' }, content: { type: 'STRING' } }, required: ['title', 'excerpt', 'content'] };
