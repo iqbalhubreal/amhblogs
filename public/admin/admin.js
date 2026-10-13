@@ -176,12 +176,18 @@
 
     $('#title').value = post.title; $('#status').value = post.status; $('#topic').value = post.topic_id || '';
     $('#lang').value = post.lang; $('#excerpt').value = post.excerpt || ''; $('#slug').value = post.slug || '';
+    $('#model').value = store.get('ib_model') || 'gemini-3.8-flash';
+    $('#thinking').value = store.get('ib_thinking') || 'none';
     let cover = post.cover || '';
     const drawCover = () => { $('#coverBox').innerHTML = cover ? `<img src="${esc(cover)}" alt="">` : 'No cover'; $('#coverRm').hidden = !cover; };
     drawCover();
     const rte = RichEditor.create($('#rte'), { onChange: mark });
     rte.setHTML(post.content || ''); dirty = false; leaveGuard = null;
-    ['title', 'status', 'topic', 'lang', 'excerpt', 'slug', 'model', 'thinking'].forEach((k) => $('#' + k).addEventListener('input', mark));
+    ['title', 'status', 'topic', 'lang', 'excerpt', 'slug'].forEach((k) => $('#' + k).addEventListener('input', mark));
+    ['model', 'thinking'].forEach((k) => $('#' + k).addEventListener('input', () => {
+      store.set('ib_' + k, $('#' + k).value);
+      mark();
+    }));
     $('#editPrompt').onclick = async () => {
       let info;
       try { info = await api('admin/translate-prompt'); } catch (e) { AdminUI.toast(e.message, true); return; }
@@ -252,6 +258,8 @@
     async function doTr(lang, quiet) {
       if (dirty && !(await save(true))) return;
       status[lang] = 'busy'; drawTr();
+      store.set('ib_model', $('#model').value);
+      store.set('ib_thinking', $('#thinking').value);
       try {
         await api('admin/translate', 'POST', { postId: curId, lang, model: $('#model').value, thinking: $('#thinking').value });
         const d = await api('admin/posts/' + curId); trs = d.translations; delete status[lang];
